@@ -8,7 +8,7 @@
           <q-icon name="campaign" size="lg" /> Tienda CellPhone</q-toolbar-title
         >
         <q-input
-          style="width: 100%; min-width: 150px; max-width: 1000px"
+          style="width: 100%; min-width: 150px; max-width: 800px"
           dense
           debounce="300"
           v-model="busqueda"
@@ -22,8 +22,8 @@
           </template>
         </q-input>
         <q-space />
-        <q-btn push label="Inicio" to="/" icon="home" color="bg-red-5" />
-        <q-btn push label="Estadísticas" to="/StatisticsPage" icon="timeline" />
+        <q-btn push label="Inicio" to="/" icon="home" color="red-13" />
+        <q-btn push label="Estadísticas" to="/StatisticsPage" icon="timeline" color="red-13" />
         <q-btn push round to="/addProductPage" icon="mdi-plus" text-color="dark" color="teal-3" />
         <q-btn flat round to="/ShoppingCart" icon="shopping_cart">
           <q-badge rounded color="blue" floating>1</q-badge></q-btn
