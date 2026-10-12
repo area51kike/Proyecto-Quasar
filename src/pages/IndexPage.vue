@@ -56,11 +56,7 @@
     </div>
 
     <div class="row q-col-gutter-md q-mt-md">
-      <div
-        v-for="producto in productosFiltrados"
-        :key="producto.id"
-        class="col-12 col-sm-6 col-md-3"
-      >
+      <div v-for="producto in productosPagina" :key="producto.id" class="col-12 col-sm-6 col-md-3">
         <q-card flat bordered>
           <q-img :src="producto.imagen" />
           <q-card-section class="text-center">
@@ -70,11 +66,32 @@
         </q-card>
       </div>
     </div>
+
+    <div class="row items-center justify-center q-gutter-md q-mt-md">
+      <q-pagination
+        v-model="pagina"
+        :max="totalPaginas"
+        :max-pages="7"
+        direction-links
+        boundary-links
+        color="red-13"
+      />
+      <div class="row items-center q-gutter-sm">
+        <span>Artículos por página:</span>
+        <q-select
+          v-model="porPagina"
+          :options="opcionesPorPagina"
+          outlined
+          dense
+          style="width: 90px"
+        />
+      </div>
+    </div>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const precioDesde = ref('')
 const precioHasta = ref('')
@@ -183,7 +200,7 @@ const productos = ref([
 
 const pagina = ref(1)
 const porPagina = ref(25)
-const opcionesPorPagina = [8, 25, 50]
+const opcionesPorPagina = [4, 8, 25, 50]
 
 const productosFiltrados = computed(() => {
   let lista = productos.value.filter((p) => {
@@ -199,5 +216,20 @@ const productosFiltrados = computed(() => {
   })
 
   return lista
+})
+
+const totalPaginas = computed(() =>
+  Math.max(1, Math.ceil(productosFiltrados.value.length / porPagina.value)),
+)
+
+const productosPagina = computed(() => {
+  const inicio = (pagina.value - 1) * porPagina.value
+  const fin = inicio + porPagina.value
+  return productosFiltrados.value.slice(inicio, fin)
+})
+
+// Si cambian los filtros, el orden o los artículos por página, volver a la página 1
+watch([precioDesde, precioHasta, campoOrden, direccionOrden, porPagina], () => {
+  pagina.value = 1
 })
 </script>
