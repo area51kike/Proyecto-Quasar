@@ -1,10 +1,20 @@
 <template>
   <q-page padding>
-    <div class="text-h4 text-center text-weight-bold q-mb-md">NUEVO ANUNCIO</div>
+    <div class="text-h4 text-center text-weight-bold q-mb-md gt-sm">NUEVO ANUNCIO</div>
 
-    <div class="row q-col-gutter-md">
-      <div class="col-12 col-md-6">
-        <q-card flat bordered class="q-pa-md q-mb-md">
+    <!-- Selector de archivos (uno solo, lo usan escritorio y celular) -->
+    <input
+      ref="inputArchivo"
+      type="file"
+      accept="image/*"
+      style="display: none"
+      @change="agregarImagen"
+    />
+
+    <div class="form-grid">
+      <!-- Columna izquierda (escritorio) -->
+      <div class="form-col">
+        <q-card flat bordered class="q-pa-md b-specs">
           <div class="q-mb-sm">
             <span class="text-weight-bold q-mr-md">Estado:</span>
             <q-option-group
@@ -54,18 +64,36 @@
           />
         </q-card>
 
-        <q-card flat bordered class="q-pa-md">
+        <q-card flat bordered class="q-pa-md b-fotos">
           <div class="text-caption text-grey-7 q-mb-sm">Imágenes</div>
 
-          <input
-            ref="inputArchivo"
-            type="file"
-            accept="image/*"
-            style="display: none"
-            @change="agregarImagen"
-          />
+          <!-- Celular y tablet: tira de fotos con el botón "Agregar Foto" -->
+          <div class="fotos-mobile lt-md">
+            <div
+              class="foto-tile column flex-center text-center cursor-pointer bordered-tile"
+              @click="inputArchivo.click()"
+            >
+              <q-icon name="mdi-plus-circle" size="48px" color="grey-8" />
+              <div class="text-caption q-mt-xs">Agregar Foto</div>
+            </div>
 
-          <div class="row q-col-gutter-md items-start">
+            <div v-for="(img, i) in imagenes" :key="img.url" class="foto-tile">
+              <q-img :src="img.url" :ratio="1" fit="cover" class="fit rounded-borders" />
+              <q-btn
+                round
+                dense
+                size="sm"
+                color="negative"
+                icon="mdi-close"
+                class="absolute-top-right q-ma-xs"
+                aria-label="Quitar foto"
+                @click="quitarImagenEn(i)"
+              />
+            </div>
+          </div>
+
+          <!-- Escritorio: tabla de imágenes con + y - -->
+          <div class="row q-col-gutter-md items-start gt-sm">
             <div class="col-auto column q-gutter-sm">
               <q-btn round color="primary" icon="mdi-plus" @click="inputArchivo.click()" />
               <q-btn
@@ -125,28 +153,44 @@
         </q-card>
       </div>
 
-      <div class="col-12 col-md-6">
-        <div class="text-weight-bold q-mb-xs">Título breve del anuncio</div>
-        <q-input v-model="anuncio.titulo" maxlength="80" outlined dense class="q-mb-md" />
-
-        <div class="row q-col-gutter-md q-mb-md">
-          <div class="col-12 col-sm-6">
-            <q-input v-model="anuncio.vendedor" label="Vendedor" outlined dense />
-          </div>
-          <div class="col-12 col-sm-6">
-            <q-input v-model="anuncio.telefono" label="Teléfono" mask="####-####" outlined dense />
-          </div>
+      <!-- Columna derecha (escritorio) -->
+      <div class="form-col">
+        <div class="b-titulo">
+          <div class="text-weight-bold q-mb-xs">Título breve del anuncio</div>
+          <q-input
+            v-model="anuncio.titulo"
+            type="textarea"
+            autogrow
+            maxlength="80"
+            input-class="text-weight-bold"
+            outlined
+            dense
+          />
         </div>
 
-        <div class="text-weight-bold q-mb-xs">DESCRIPCIÓN</div>
-        <q-input v-model="anuncio.descripcion" type="textarea" rows="6" outlined class="q-mb-md" />
+        <div class="contacto b-contacto">
+          <q-input v-model="anuncio.vendedor" label="Vendedor" outlined dense />
+          <q-input v-model="anuncio.telefono" label="Teléfono" mask="####-####" outlined dense />
+        </div>
 
-        <q-card flat bordered class="q-pa-md q-mb-md" style="max-width: 250px">
+        <div class="b-desc">
+          <div class="text-weight-bold q-mb-xs">DESCRIPCIÓN</div>
+          <q-input v-model="anuncio.descripcion" type="textarea" rows="6" outlined />
+        </div>
+
+        <q-card flat bordered class="q-pa-md card-precio b-precio">
           <div class="text-caption text-grey-7 q-mb-sm">PRECIO</div>
-          <q-input v-model.number="anuncio.precio" type="number" prefix="$" outlined dense />
+          <q-input
+            v-model.number="anuncio.precio"
+            type="number"
+            prefix="$"
+            :input-class="$q.screen.lt.md ? 'text-h5 text-weight-bold text-italic' : ''"
+            outlined
+            dense
+          />
         </q-card>
 
-        <div class="row q-gutter-md">
+        <div class="row b-botones" :class="$q.screen.lt.md ? 'justify-around' : 'q-gutter-md'">
           <q-btn
             outline
             color="grey-8"
@@ -154,7 +198,13 @@
             label="Cancelar"
             @click="cancelar"
           />
-          <q-btn color="red-13" icon="mdi-content-save" label="Crear" @click="crear" />
+          <q-btn
+            color="red-13"
+            icon="mdi-content-save"
+            :label="$q.screen.lt.md ? 'Crear Anuncio' : 'Crear'"
+            :loading="guardando"
+            @click="crear"
+          />
         </div>
       </div>
     </div>
@@ -196,6 +246,7 @@ const sistemas = ['Android', 'iOS', 'Windows']
 const inputArchivo = ref(null)
 const imagenes = ref([])
 const seleccionada = ref(-1)
+const guardando = ref(false)
 
 function agregarImagen(evento) {
   const archivo = evento.target.files[0]
@@ -204,16 +255,23 @@ function agregarImagen(evento) {
     tamano: Math.round(archivo.size / 1024),
     tipo: archivo.type.split('/')[1],
     url: URL.createObjectURL(archivo),
+    archivo, // el File real, para subirlo a CouchDB
   })
   seleccionada.value = imagenes.value.length - 1
   evento.target.value = '' // permite volver a elegir el mismo archivo
 }
 
-function quitarImagen() {
-  if (seleccionada.value === -1) return
-  URL.revokeObjectURL(imagenes.value[seleccionada.value].url)
-  imagenes.value.splice(seleccionada.value, 1)
+// Quita la imagen que está en la posición i (botón X de cada foto en celular)
+function quitarImagenEn(i) {
+  if (i < 0 || i >= imagenes.value.length) return
+  URL.revokeObjectURL(imagenes.value[i].url)
+  imagenes.value.splice(i, 1)
   seleccionada.value = imagenes.value.length - 1
+}
+
+// Quita la imagen seleccionada (botón - en escritorio)
+function quitarImagen() {
+  quitarImagenEn(seleccionada.value)
 }
 
 // Botones
@@ -221,22 +279,123 @@ function cancelar() {
   router.push('/')
 }
 
-function crear() {
+async function crear() {
   if (!anuncio.value.titulo || !anuncio.value.precio) {
     $q.notify({ message: 'Falta el título o el precio', color: 'negative' })
     return
   }
 
-  // La primera imagen de la lista es la que se muestra en la tarjeta
-  store.agregar(anuncio.value, imagenes.value[0]?.url)
+  guardando.value = true
+  try {
+    // Se guarda el anuncio y todas las imágenes de la lista como attachments
+    await store.agregar(
+      anuncio.value,
+      imagenes.value.map((img) => img.archivo),
+    )
 
-  $q.notify({
-    message: 'Anuncio guardado satisfactoriamente',
-    color: 'positive',
-    icon: 'mdi-check-circle',
-    position: 'top',
-    timeout: 2500,
-  })
-  router.push('/')
+    $q.notify({
+      message: 'Anuncio guardado satisfactoriamente',
+      color: 'positive',
+      icon: 'mdi-check-circle',
+      position: 'top',
+      timeout: 2500,
+    })
+    router.push('/')
+  } catch (error) {
+    console.error(error)
+    $q.notify({
+      message: `No se pudo guardar el anuncio (${error.response?.status ?? error.message})`,
+      color: 'negative',
+    })
+  } finally {
+    guardando.value = false
+  }
 }
 </script>
+
+<style scoped>
+/* Escritorio: dos columnas */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contacto {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card-precio {
+  max-width: 250px;
+}
+
+/* Tira de fotos (celular y tablet) */
+.fotos-mobile {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.foto-tile {
+  position: relative;
+  flex: 0 0 140px;
+  width: 140px;
+  height: 140px;
+}
+
+.bordered-tile {
+  display: flex;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+/* Celular y tablet: una sola columna, en el orden del wireframe */
+@media (max-width: 1023px) {
+  .form-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .form-col {
+    display: contents;
+  }
+
+  .b-fotos {
+    order: 1;
+  }
+  .b-titulo {
+    order: 2;
+  }
+  .b-precio {
+    order: 3;
+  }
+  .b-contacto {
+    order: 4;
+  }
+  .b-specs {
+    order: 5;
+  }
+  .b-desc {
+    order: 6;
+  }
+  .b-botones {
+    order: 7;
+  }
+
+  .card-precio {
+    max-width: none;
+  }
+}
+</style>

@@ -2,13 +2,33 @@
   <q-layout view="LHh Lpr lFf">
     <q-header elevated>
       <q-toolbar class="bg-red-14 text-white">
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
+        <!-- Escritorio: abre/cierra el panel de filtros -->
+        <q-btn
+          class="gt-sm"
+          flat
+          dense
+          round
+          icon="menu"
+          aria-label="Filtros"
+          @click="filtros.panelFiltros = !filtros.panelFiltros"
+        />
+        <!-- Celular y tablet: abre el menú principal (derecha) -->
+        <q-btn
+          class="lt-md"
+          flat
+          dense
+          round
+          icon="menu"
+          aria-label="Menú"
+          @click="menuAbierto = true"
+        />
 
-        <q-toolbar-title shrink>
+        <q-toolbar-title shrink class="gt-sm">
           <q-icon name="campaign" size="lg" /> Tienda CellPhone</q-toolbar-title
         >
         <q-input
           v-model="filtros.busqueda"
+          class="q-ml-sm"
           style="width: 100%; min-width: 150px; max-width: 800px"
           dense
           debounce="300"
@@ -22,16 +42,57 @@
           </template>
         </q-input>
         <q-space />
-        <q-btn push label="Inicio" to="/" icon="home" color="red-13" />
-        <q-btn push label="Estadísticas" to="/StatisticsPage" icon="timeline" color="red-13" />
-        <q-btn push round to="/addProductPage" icon="mdi-plus" text-color="dark" color="teal-3" />
-        <q-btn flat round to="/ShoppingCart" icon="shopping_cart">
+        <!-- Estos botones solo se ven en escritorio; en celular/tablet van en el menú -->
+        <q-btn class="gt-sm" push label="Inicio" to="/" icon="home" color="red-13" />
+        <q-btn
+          class="gt-sm"
+          push
+          label="Estadísticas"
+          to="/StatisticsPage"
+          icon="timeline"
+          color="red-13"
+        />
+        <q-btn
+          class="gt-sm"
+          push
+          round
+          to="/addProductPage"
+          icon="mdi-plus"
+          text-color="dark"
+          color="teal-3"
+        />
+        <q-btn class="gt-sm" flat round to="/ShoppingCart" icon="shopping_cart">
           <q-badge rounded color="blue" floating>1</q-badge></q-btn
         >
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
+    <!-- Menú principal (derecha), solo celular y tablet -->
+    <q-drawer v-model="menuAbierto" side="right" behavior="mobile" bordered>
+      <q-list>
+        <q-item-label header class="row items-center text-weight-bold text-h6 text-dark">
+          <q-icon name="campaign" size="md" class="q-mr-sm" /> Tienda CellPhone
+        </q-item-label>
+        <q-separator />
+        <q-item
+          v-for="enlace in enlaces"
+          :key="enlace.to"
+          :to="enlace.to"
+          exact
+          clickable
+          v-ripple
+          @click="menuAbierto = false"
+        >
+          <q-item-section avatar>
+            <q-icon :name="enlace.icono" />
+          </q-item-section>
+          <q-item-section>{{ enlace.texto }}</q-item-section>
+        </q-item>
+      </q-list>
+    </q-drawer>
+
+    <!-- Filtros: fijo en escritorio, desplegable en celular/tablet -->
+    <q-drawer v-model="filtros.panelFiltros" show-if-above bordered>
       <q-list>
         <q-toggle v-model="filtros.soloNuevos" color="red" label="Nuevo" />
 
@@ -95,11 +156,14 @@ import { useProductosStore } from '@/stores/productos'
 const filtros = useFiltrosStore()
 const productos = useProductosStore()
 
-const leftDrawerOpen = ref(false)
+const menuAbierto = ref(false)
 
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value
-}
+const enlaces = [
+  { texto: 'Inicio', to: '/', icono: 'home' },
+  { texto: 'Nuevo Anuncio', to: '/addProductPage', icono: 'mdi-plus' },
+  { texto: 'Carrito', to: '/ShoppingCart', icono: 'shopping_cart' },
+  { texto: 'Estadísticas', to: '/StatisticsPage', icono: 'timeline' },
+]
 
 const marcas = ['Samsung', 'Huawei', 'Nokia', 'iPhone', 'Xiaomi']
 const sistemas = ['Android', 'iOS', 'Windows']

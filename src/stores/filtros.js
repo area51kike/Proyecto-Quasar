@@ -7,6 +7,7 @@ export const useFiltrosStore = defineStore('filtros', () => {
   const marcas = ref([])
   const sistemas = ref([])
   const pantallas = ref([])
+  const panelFiltros = ref(false) // panel de filtros abierto (celular/tablet o escritorio)
 
-  return { busqueda, soloNuevos, marcas, sistemas, pantallas }
+  return { busqueda, soloNuevos, marcas, sistemas, pantallas, panelFiltros }
 })

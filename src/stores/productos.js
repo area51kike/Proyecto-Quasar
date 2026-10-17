@@ -1,8 +1,26 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { api } from '@/boot/axios'
+
+const DB = 'imagenesfpi' // base de datos en CouchDB
+const TIENDA = 'cellphone-kike' // etiqueta para distinguir mis anuncios si la base es compartida
+const SIN_IMAGEN = 'https://placehold.co/400x400?text=Sin+imagen'
+
+// Convierte un documento de CouchDB a la forma que usan las tarjetas
+function aProducto(doc) {
+  const primera = Object.keys(doc._attachments || {})[0]
+  return {
+    ...doc,
+    id: doc._id,
+    descripcion: doc.titulo, // la tarjeta muestra este texto
+    detalle: doc.descripcion, // descripción larga del formulario
+    imagen: primera ? `${api.defaults.baseURL}/${DB}/${doc._id}/${primera}` : SIN_IMAGEN,
+  }
+}
 
 export const useProductosStore = defineStore('productos', () => {
-  const productos = ref([
+  // Productos de ejemplo del wireframe (puedes borrarlos cuando quieras)
+  const demo = [
     {
       id: 1,
       marca: 'Samsung',
@@ -96,18 +114,48 @@ export const useProductosStore = defineStore('productos', () => {
       imagen:
         'https://images-na.ssl-images-amazon.com/images/I/71LnIsqrcjL._AC_UL495_SR435,495_.jpg',
     },
-  ])
-  function agregar(anuncio, imagen) {
-    const nuevoId = Math.max(0, ...productos.value.map((p) => p.id)) + 1
-    productos.value.push({
-      ...anuncio,
-      id: nuevoId,
-      fecha: new Date().toISOString().slice(0, 10),
-      descripcion: anuncio.titulo, // la tarjeta muestra este texto
-      detalle: anuncio.descripcion, // descripción larga del formulario
-      imagen: imagen || 'https://placehold.co/400x400?text=Sin+imagen',
-    })
+  ]
+
+  const remotos = ref([]) // productos que vienen de CouchDB
+  const cargando = ref(false)
+  const productos = computed(() => [...remotos.value, ...demo])
+
+  // GET: trae mis anuncios desde CouchDB (Mango query: POST /{db}/_find)
+  async function cargar() {
+    cargando.value = true
+    try {
+      const { data } = await api.post(`/${DB}/_find`, {
+        selector: { tienda: TIENDA },
+        limit: 1000,
+      })
+      remotos.value = data.docs.map(aProducto)
+    } finally {
+      cargando.value = false
+    }
   }
 
-  return { productos, agregar }
+  // POST el documento y luego PUT de cada imagen como attachment (encadenando el rev)
+  async function agregar(anuncio, archivos = []) {
+    const { data } = await api.post(`/${DB}`, {
+      ...anuncio,
+      precio: Number(anuncio.precio),
+      tienda: TIENDA,
+      fecha: new Date().toISOString().slice(0, 10),
+    })
+
+    let rev = data.rev
+    for (let i = 0; i < archivos.length; i++) {
+      const archivo = archivos[i]
+      const ext = archivo.type.split('/')[1] || 'jpg'
+      const resp = await api.put(`/${DB}/${data.id}/archivo${i}.${ext}`, archivo, {
+        params: { rev },
+        headers: { 'Content-Type': archivo.type },
+      })
+      rev = resp.data.rev
+    }
+
+    await cargar()
+  }
+
+  return { productos, cargando, cargar, agregar }
 })

@@ -1,6 +1,40 @@
 <template>
   <q-page padding>
-    <div class="row justify-center q-gutter-md">
+    <!-- Celular y tablet: Ordenar por + botón de filtros -->
+    <div class="row items-center no-wrap q-gutter-sm lt-md">
+      <q-card flat bordered class="q-pa-sm col">
+        <div class="row items-center no-wrap q-gutter-sm">
+          <span>Ordenar por:</span>
+          <q-select
+            v-model="campoOrden"
+            :options="opcionesOrden"
+            emit-value
+            map-options
+            outlined
+            dense
+            class="col"
+          />
+          <q-btn
+            flat
+            round
+            dense
+            :icon="direccionOrden === 'desc' ? 'mdi-arrow-up' : 'mdi-arrow-down'"
+            aria-label="Cambiar dirección"
+            @click="direccionOrden = direccionOrden === 'asc' ? 'desc' : 'asc'"
+          />
+        </div>
+      </q-card>
+      <q-btn
+        outline
+        color="red-13"
+        icon="mdi-filter"
+        aria-label="Filtros"
+        @click="filtros.panelFiltros = true"
+      />
+    </div>
+
+    <!-- Escritorio: rango de precio y botones de orden -->
+    <div class="row justify-center q-gutter-md gt-sm">
       <q-card flat bordered class="q-pa-sm">
         <div class="row items-center justify-center q-gutter-sm">
           <span>Precio:</span>
@@ -55,25 +89,23 @@
       </q-card>
     </div>
 
-    <div class="row q-col-gutter-md q-mt-md">
-      <div v-for="producto in productosPagina" :key="producto.id" class="col-12 col-sm-6 col-md-3">
-        <q-card flat bordered class="column full-height">
-          <q-img :src="producto.imagen" :ratio="1" fit="contain" />
-          <q-card-section class="text-center col">
-            <div class="text-weight-bold">${{ producto.precio.toFixed(2) }}</div>
-            <div>{{ producto.descripcion }}</div>
-          </q-card-section>
-        </q-card>
-      </div>
+    <div class="grid-productos q-mt-md">
+      <q-card v-for="producto in productosPagina" :key="producto.id" flat bordered class="column">
+        <q-img :src="producto.imagen" :ratio="1" fit="contain" />
+        <q-card-section class="text-center col">
+          <div class="text-weight-bold">${{ producto.precio.toFixed(2) }}</div>
+          <div>{{ producto.descripcion }}</div>
+        </q-card-section>
+      </q-card>
     </div>
 
     <div class="row items-center justify-center q-gutter-md q-mt-md">
       <q-pagination
         v-model="pagina"
         :max="totalPaginas"
-        :max-pages="7"
+        :max-pages="$q.screen.lt.md ? 5 : 7"
         direction-links
-        boundary-links
+        :boundary-links="!$q.screen.lt.md"
         color="red-13"
       />
       <div class="row items-center q-gutter-sm">
@@ -91,17 +123,25 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useFiltrosStore } from '@/stores/filtros'
 import { useProductosStore } from '@/stores/productos'
 
-const store = useProductosStore()
+onMounted(() =>
+  useProductosStore()
+    .cargar()
+    .catch((e) => console.error('No se pudo cargar de CouchDB', e)),
+)
 const filtros = useFiltrosStore()
 const { busqueda, soloNuevos, marcas, sistemas, pantallas } = storeToRefs(filtros)
 
 const precioDesde = ref('')
 const precioHasta = ref('')
+const opcionesOrden = [
+  { label: 'Precio', value: 'precio' },
+  { label: 'Fecha', value: 'fecha' },
+]
 const campoOrden = ref('precio')
 const direccionOrden = ref('asc')
 
@@ -119,7 +159,7 @@ const porPagina = ref(25)
 const opcionesPorPagina = [4, 8, 25, 50]
 
 const productosFiltrados = computed(() => {
-  let lista = store.productos.filter((p) => {
+  let lista = useProductosStore().productos.filter((p) => {
     const desde = precioDesde.value === '' ? 0 : Number(precioDesde.value)
     const hasta = precioHasta.value === '' ? Infinity : Number(precioHasta.value)
     const texto = busqueda.value.toLowerCase()
@@ -172,3 +212,16 @@ watch(
   },
 )
 </script>
+<style scoped>
+.grid-productos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (min-width: 1024px) {
+  .grid-productos {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+</style>
