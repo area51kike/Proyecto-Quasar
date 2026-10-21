@@ -62,8 +62,10 @@
           color="teal-3"
         />
         <q-btn class="gt-sm" flat round to="/ShoppingCart" icon="shopping_cart">
-          <q-badge rounded color="blue" floating>1</q-badge></q-btn
-        >
+          <q-badge v-if="carrito.cantidadTotal > 0" rounded color="blue" floating>
+            {{ carrito.cantidadTotal }}
+          </q-badge>
+        </q-btn>
       </q-toolbar>
     </q-header>
 
@@ -87,6 +89,9 @@
             <q-icon :name="enlace.icono" />
           </q-item-section>
           <q-item-section>{{ enlace.texto }}</q-item-section>
+          <q-item-section v-if="enlace.to === '/ShoppingCart' && carrito.cantidadTotal > 0" side>
+            <q-badge color="blue" rounded>{{ carrito.cantidadTotal }}</q-badge>
+          </q-item-section>
         </q-item>
       </q-list>
     </q-drawer>
@@ -152,9 +157,11 @@
 import { ref } from 'vue'
 import { useFiltrosStore } from '@/stores/filtros'
 import { useProductosStore } from '@/stores/productos'
+import { useCarritoStore } from '@/stores/carrito'
 
 const filtros = useFiltrosStore()
 const productos = useProductosStore()
+const carrito = useCarritoStore()
 
 const menuAbierto = ref(false)
 

@@ -8,13 +8,15 @@ const SIN_IMAGEN = 'https://placehold.co/400x400?text=Sin+imagen'
 
 // Convierte un documento de CouchDB a la forma que usan las tarjetas
 function aProducto(doc) {
-  const primera = Object.keys(doc._attachments || {})[0]
+  const nombres = Object.keys(doc._attachments || {})
+  const primera = nombres[0]
   return {
     ...doc,
     id: doc._id,
-    descripcion: doc.titulo, // la tarjeta muestra este texto
-    detalle: doc.descripcion, // descripción larga del formulario
+    descripcion: doc.titulo,
+    detalle: doc.descripcion,
     imagen: primera ? `${api.defaults.baseURL}/${DB}/${doc._id}/${primera}` : SIN_IMAGEN,
+    imagenes: nombres.map((n) => `${api.defaults.baseURL}/${DB}/${doc._id}/${n}`),
   }
 }
 
@@ -156,6 +158,9 @@ export const useProductosStore = defineStore('productos', () => {
 
     await cargar()
   }
+  function porId(id) {
+    return productos.value.find((p) => String(p.id) === String(id))
+  }
 
-  return { productos, cargando, cargar, agregar }
+  return { productos, cargando, cargar, agregar, porId }
 })

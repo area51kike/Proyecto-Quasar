@@ -96,6 +96,21 @@
           <div class="text-weight-bold">${{ producto.precio.toFixed(2) }}</div>
           <div>{{ producto.descripcion }}</div>
         </q-card-section>
+        <q-card-actions align="center">
+          <q-btn flat round dense color="red-13" icon="visibility" :to="`/producto/${producto.id}`">
+            <q-tooltip>Ver detalles</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat
+            round
+            dense
+            color="red-13"
+            icon="add_shopping_cart"
+            @click="agregarAlCarrito(producto)"
+          >
+            <q-tooltip>Añadir al carrito</q-tooltip>
+          </q-btn>
+        </q-card-actions>
       </q-card>
     </div>
 
@@ -127,6 +142,16 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useFiltrosStore } from '@/stores/filtros'
 import { useProductosStore } from '@/stores/productos'
+import { useQuasar } from 'quasar'
+import { useCarritoStore } from '@/stores/carrito'
+
+const $q = useQuasar()
+const carrito = useCarritoStore()
+
+function agregarAlCarrito(producto) {
+  carrito.agregar(producto)
+  $q.notify({ message: 'Añadido al carrito', color: 'positive', icon: 'check', timeout: 1000 })
+}
 
 onMounted(() =>
   useProductosStore()
