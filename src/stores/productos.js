@@ -1,22 +1,29 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/boot/axios'
+import { db } from '@/boot/firebase'
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
 
-const DB = 'fpi-imagenes' // base de datos en CouchDB local (http://localhost:5984/fpi-imagenes)
-const TIENDA = 'cellphone-kike' // etiqueta para distinguir mis anuncios si la base es compartida
+const DB = 'fpi-imagenes' // CouchDB: SOLO guarda las fotos (attachments)
+const COLECCION = 'anuncios' // Firestore: guarda los DATOS del anuncio
+const TIENDA = 'cellphone-kike'
 const SIN_IMAGEN = 'https://placehold.co/400x400?text=Sin+imagen'
 
-// Convierte un documento de CouchDB a la forma que usan las tarjetas
-function aProducto(doc) {
-  const nombres = Object.keys(doc._attachments || {})
-  const primera = nombres[0]
+// El id es el mismo en Firestore y en CouchDB
+function urlImagen(id, nombre) {
+  return `${api.defaults.baseURL}/${DB}/${id}/${nombre}`
+}
+
+// data.imagenes es la lista de nombres de las fotos (ej. ['archivo0.jpeg'])
+function aProducto(id, data) {
+  const nombres = data.imagenes || []
   return {
-    ...doc,
-    id: doc._id,
-    descripcion: doc.titulo,
-    detalle: doc.descripcion,
-    imagen: primera ? `${api.defaults.baseURL}/${DB}/${doc._id}/${primera}` : SIN_IMAGEN,
-    imagenes: nombres.map((n) => `${api.defaults.baseURL}/${DB}/${doc._id}/${n}`),
+    ...data,
+    id,
+    descripcion: data.titulo,
+    detalle: data.descripcion,
+    imagen: nombres.length ? urlImagen(id, nombres[0]) : SIN_IMAGEN,
+    imagenes: nombres.map((n) => urlImagen(id, n)),
   }
 }
 
@@ -118,46 +125,62 @@ export const useProductosStore = defineStore('productos', () => {
     },
   ]
 
-  const remotos = ref([]) // productos que vienen de CouchDB
+  const remotos = ref([]) // anuncios que vienen de Firestore
   const cargando = ref(false)
+  const cargado = ref(false)
   const productos = computed(() => [...remotos.value, ...demo])
 
-  // GET: trae mis anuncios desde CouchDB (Mango query: POST /{db}/_find)
-  async function cargar() {
+  // Lee los datos de Firestore (una sola vez, salvo que forces la recarga)
+  async function cargar(forzar = false) {
+    if (cargado.value && !forzar) return
     cargando.value = true
     try {
-      const { data } = await api.post(`/${DB}/_find`, {
-        selector: { tienda: TIENDA },
-        limit: 1000,
-      })
-      remotos.value = data.docs.map(aProducto)
+      const q = query(collection(db, COLECCION), where('tienda', '==', TIENDA))
+      const snap = await getDocs(q)
+      remotos.value = snap.docs.map((d) => aProducto(d.id, d.data()))
+      cargado.value = true
     } finally {
       cargando.value = false
     }
   }
 
-  // POST el documento y luego PUT de cada imagen como attachment (encadenando el rev)
+  // 1) Crea un documento vacío en CouchDB para obtener el id y sube las fotos
+  // 2) Guarda los datos en Firestore con ese mismo id
   async function agregar(anuncio, archivos = []) {
-    const { data } = await api.post(`/${DB}`, {
-      ...anuncio,
-      precio: Number(anuncio.precio),
-      tienda: TIENDA,
-      fecha: new Date().toISOString().slice(0, 10),
-    })
-
+    const { data } = await api.post(`/${DB}`, { tienda: TIENDA })
+    const id = data.id
     let rev = data.rev
-    for (let i = 0; i < archivos.length; i++) {
-      const archivo = archivos[i]
-      const ext = archivo.type.split('/')[1] || 'jpg'
-      const resp = await api.put(`/${DB}/${data.id}/archivo${i}.${ext}`, archivo, {
-        params: { rev },
-        headers: { 'Content-Type': archivo.type },
-      })
-      rev = resp.data.rev
-    }
 
-    await cargar()
+    try {
+      const nombres = []
+      for (let i = 0; i < archivos.length; i++) {
+        const archivo = archivos[i]
+        const ext = archivo.type.split('/')[1] || 'jpg'
+        const nombre = `archivo${i}.${ext}`
+        const resp = await api.put(`/${DB}/${id}/${nombre}`, archivo, {
+          params: { rev },
+          headers: { 'Content-Type': archivo.type },
+        })
+        rev = resp.data.rev
+        nombres.push(nombre)
+      }
+
+      const datos = {
+        ...anuncio,
+        precio: Number(anuncio.precio),
+        tienda: TIENDA,
+        fecha: new Date().toISOString().slice(0, 10),
+        imagenes: nombres,
+      }
+      await setDoc(doc(db, COLECCION, id), datos)
+      remotos.value.unshift(aProducto(id, datos))
+    } catch (error) {
+      // si algo falla, borro el documento de CouchDB para no dejar basura
+      await api.delete(`/${DB}/${id}`, { params: { rev } }).catch(() => {})
+      throw error
+    }
   }
+
   function porId(id) {
     return productos.value.find((p) => String(p.id) === String(id))
   }
