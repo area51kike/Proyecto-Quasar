@@ -1,30 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/boot/axios'
-import { db } from '@/boot/firebase'
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
 
-const DB = 'imagenesfpi' // CouchDB: SOLO guarda las imágenes (attachments)
-const COLECCION = 'anuncios' // Firestore: guarda los DATOS del anuncio
-const TIENDA = 'cellphone-kike' // etiqueta para distinguir mis anuncios
+const DB = 'fpi-imagenes' // base de datos en CouchDB local (http://localhost:5984/fpi-imagenes)
+const TIENDA = 'cellphone-kike' // etiqueta para distinguir mis anuncios si la base es compartida
 const SIN_IMAGEN = 'https://placehold.co/400x400?text=Sin+imagen'
 
-// URL de una imagen: el id es el mismo en Firestore y en CouchDB
-function urlImagen(id, nombre) {
-  return `${api.defaults.baseURL}/${DB}/${id}/${nombre}`
-}
-
-// Convierte un documento de Firestore a la forma que usan las tarjetas.
-// data.imagenes es la lista de nombres de attachments (ej. ['archivo0.jpeg']).
-function aProducto(id, data) {
-  const nombres = data.imagenes || []
+// Convierte un documento de CouchDB a la forma que usan las tarjetas
+function aProducto(doc) {
+  const nombres = Object.keys(doc._attachments || {})
+  const primera = nombres[0]
   return {
-    ...data,
-    id,
-    descripcion: data.titulo,
-    detalle: data.descripcion,
-    imagen: nombres.length ? urlImagen(id, nombres[0]) : SIN_IMAGEN,
-    imagenes: nombres.map((n) => urlImagen(id, n)),
+    ...doc,
+    id: doc._id,
+    descripcion: doc.titulo,
+    detalle: doc.descripcion,
+    imagen: primera ? `${api.defaults.baseURL}/${DB}/${doc._id}/${primera}` : SIN_IMAGEN,
+    imagenes: nombres.map((n) => `${api.defaults.baseURL}/${DB}/${doc._id}/${n}`),
   }
 }
 
@@ -126,66 +118,45 @@ export const useProductosStore = defineStore('productos', () => {
     },
   ]
 
-  const remotos = ref([]) // productos que vienen de Firestore
+  const remotos = ref([]) // productos que vienen de CouchDB
   const cargando = ref(false)
-  const cargado = ref(false) // para no volver a leer Firestore en cada página
   const productos = computed(() => [...remotos.value, ...demo])
 
-  // GET: una sola lectura de Firestore trae los datos de todos mis anuncios.
-  // Si ya se cargaron, no vuelve a leer (ahorra lecturas del plan Spark).
-  async function cargar(forzar = false) {
-    if (cargado.value && !forzar) return
+  // GET: trae mis anuncios desde CouchDB (Mango query: POST /{db}/_find)
+  async function cargar() {
     cargando.value = true
     try {
-      const q = query(collection(db, COLECCION), where('tienda', '==', TIENDA))
-      const snap = await getDocs(q)
-      remotos.value = snap.docs.map((d) => aProducto(d.id, d.data()))
-      cargado.value = true
+      const { data } = await api.post(`/${DB}/_find`, {
+        selector: { tienda: TIENDA },
+        limit: 1000,
+      })
+      remotos.value = data.docs.map(aProducto)
     } finally {
       cargando.value = false
     }
   }
 
-  // Crea el anuncio:
-  // 1) CouchDB: documento vacío -> nos da el id; luego PUT de cada imagen como attachment
-  // 2) Firestore: los datos, usando ESE MISMO id
+  // POST el documento y luego PUT de cada imagen como attachment (encadenando el rev)
   async function agregar(anuncio, archivos = []) {
-    // 1) documento mínimo en CouchDB (sin los datos del anuncio)
-    const { data } = await api.post(`/${DB}`, { tienda: TIENDA })
-    const id = data.id
+    const { data } = await api.post(`/${DB}`, {
+      ...anuncio,
+      precio: Number(anuncio.precio),
+      tienda: TIENDA,
+      fecha: new Date().toISOString().slice(0, 10),
+    })
+
     let rev = data.rev
-
-    try {
-      const nombres = []
-      for (let i = 0; i < archivos.length; i++) {
-        const archivo = archivos[i]
-        const ext = archivo.type.split('/')[1] || 'jpg'
-        const nombre = `archivo${i}.${ext}`
-        const resp = await api.put(`/${DB}/${id}/${nombre}`, archivo, {
-          params: { rev },
-          headers: { 'Content-Type': archivo.type },
-        })
-        rev = resp.data.rev
-        nombres.push(nombre)
-      }
-
-      // 2) datos en Firestore con el mismo id
-      const datos = {
-        ...anuncio,
-        precio: Number(anuncio.precio),
-        tienda: TIENDA,
-        fecha: new Date().toISOString().slice(0, 10),
-        imagenes: nombres,
-      }
-      await setDoc(doc(db, COLECCION, id), datos)
-
-      // lo agrego a la lista local (sin volver a leer todo Firestore)
-      remotos.value.unshift(aProducto(id, datos))
-    } catch (error) {
-      // si algo falló, borro el documento de CouchDB para no dejar huérfanos
-      await api.delete(`/${DB}/${id}`, { params: { rev } }).catch(() => {})
-      throw error
+    for (let i = 0; i < archivos.length; i++) {
+      const archivo = archivos[i]
+      const ext = archivo.type.split('/')[1] || 'jpg'
+      const resp = await api.put(`/${DB}/${data.id}/archivo${i}.${ext}`, archivo, {
+        params: { rev },
+        headers: { 'Content-Type': archivo.type },
+      })
+      rev = resp.data.rev
     }
+
+    await cargar()
   }
   function porId(id) {
     return productos.value.find((p) => String(p.id) === String(id))
